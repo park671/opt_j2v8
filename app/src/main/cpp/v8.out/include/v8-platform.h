@@ -158,10 +158,9 @@ class TaskRunner {
 class JobDelegate {
  public:
   /**
-   * Returns true if this thread *must* return from the worker task on the
+   * Returns true if this thread should return from the worker task on the
    * current thread ASAP. Workers should periodically invoke ShouldYield (or
    * YieldIfNeeded()) as often as is reasonable.
-   * After this method returned true, ShouldYield must not be called again.
    */
   virtual bool ShouldYield() = 0;
 
@@ -285,8 +284,6 @@ class ConvertableToTraceFormat {
  * V8 Tracing controller.
  *
  * Can be implemented by an embedder to record trace events from V8.
- *
- * Will become obsolete in Perfetto SDK build (v8_use_perfetto = true).
  */
 class TracingController {
  public:
@@ -350,16 +347,10 @@ class TracingController {
     virtual void OnTraceDisabled() = 0;
   };
 
-  /**
-   * Adds tracing state change observer.
-   * Does nothing in Perfetto SDK build (v8_use_perfetto = true).
-   */
+  /** Adds tracing state change observer. */
   virtual void AddTraceStateObserver(TraceStateObserver*) {}
 
-  /**
-   * Removes tracing state change observer.
-   * Does nothing in Perfetto SDK build (v8_use_perfetto = true).
-   */
+  /** Removes tracing state change observer. */
   virtual void RemoveTraceStateObserver(TraceStateObserver*) {}
 };
 
@@ -437,17 +428,6 @@ class PageAllocator {
    */
   virtual bool SetPermissions(void* address, size_t length,
                               Permission permissions) = 0;
-
-  /**
-   * Recommits discarded pages in the given range with given permissions.
-   * Discarded pages must be recommitted with their original permissions
-   * before they are used again.
-   */
-  virtual bool RecommitPages(void* address, size_t length,
-                             Permission permissions) {
-    // TODO(v8:12797): make it pure once it's implemented on Chromium side.
-    return false;
-  }
 
   /**
    * Frees memory in the given [address, address + size) range. address and size
@@ -542,7 +522,7 @@ static constexpr PlatformSharedMemoryHandle kInvalidSharedMemoryHandle = -1;
 // to avoid pulling in large OS header files into this header file. Instead,
 // the users of these routines are expected to include the respecitve OS
 // headers in addition to this one.
-#if V8_OS_MACOS
+#if defined(V8_OS_MACOSX) && !defined(V8_OS_IOS)
 // Convert between a shared memory handle and a mach_port_t referencing a memory
 // entry object.
 inline PlatformSharedMemoryHandle SharedMemoryHandleFromMachMemoryEntry(
@@ -553,7 +533,7 @@ inline unsigned int MachMemoryEntryFromSharedMemoryHandle(
     PlatformSharedMemoryHandle handle) {
   return static_cast<unsigned int>(handle);
 }
-#elif V8_OS_FUCHSIA
+#elif defined(V8_OS_FUCHSIA)
 // Convert between a shared memory handle and a zx_handle_t to a VMO.
 inline PlatformSharedMemoryHandle SharedMemoryHandleFromVMO(uint32_t handle) {
   return static_cast<PlatformSharedMemoryHandle>(handle);
@@ -561,7 +541,7 @@ inline PlatformSharedMemoryHandle SharedMemoryHandleFromVMO(uint32_t handle) {
 inline uint32_t VMOFromSharedMemoryHandle(PlatformSharedMemoryHandle handle) {
   return static_cast<uint32_t>(handle);
 }
-#elif V8_OS_WIN
+#elif defined(V8_OS_WIN)
 // Convert between a shared memory handle and a Windows HANDLE to a file mapping
 // object.
 inline PlatformSharedMemoryHandle SharedMemoryHandleFromFileMapping(
@@ -601,8 +581,6 @@ enum class PagePermissions {
  * sub-spaces and (private or shared) memory pages can be allocated, freed, and
  * modified. This interface is meant to eventually replace the PageAllocator
  * interface, and can be used as an alternative in the meantime.
- *
- * This API is not yet stable and may change without notice!
  */
 class VirtualAddressSpace {
  public:
@@ -704,23 +682,19 @@ class VirtualAddressSpace {
   /**
    * Frees previously allocated pages.
    *
-   * This function will terminate the process on failure as this implies a bug
-   * in the client. As such, there is no return value.
-   *
    * \param address The start address of the pages to free. This address must
-   * have been obtained through a call to AllocatePages.
+   * have been obtains from a call to AllocatePages.
    *
    * \param size The size in bytes of the region to free. This must match the
    * size passed to AllocatePages when the pages were allocated.
+   *
+   * \returns true on success, false otherwise.
    */
-  virtual void FreePages(Address address, size_t size) = 0;
+  virtual V8_WARN_UNUSED_RESULT bool FreePages(Address address,
+                                               size_t size) = 0;
 
   /**
    * Sets permissions of all allocated pages in the given range.
-   *
-   * This operation can fail due to OOM, in which case false is returned. If
-   * the operation fails for a reason other than OOM, this function will
-   * terminate the process as this implies a bug in the client.
    *
    * \param address The start address of the range. Must be aligned to
    * page_size().
@@ -730,7 +704,7 @@ class VirtualAddressSpace {
    *
    * \param permissions The new permissions for the range.
    *
-   * \returns true on success, false on OOM.
+   * \returns true on success, false otherwise.
    */
   virtual V8_WARN_UNUSED_RESULT bool SetPagePermissions(
       Address address, size_t size, PagePermissions permissions) = 0;
@@ -757,17 +731,17 @@ class VirtualAddressSpace {
   /**
    * Frees an existing guard region.
    *
-   * This function will terminate the process on failure as this implies a bug
-   * in the client. As such, there is no return value.
-   *
    * \param address The start address of the guard region to free. This address
    * must have previously been used as address parameter in a successful
    * invocation of AllocateGuardRegion.
    *
    * \param size The size in bytes of the guard region to free. This must match
    * the size passed to AllocateGuardRegion when the region was created.
+   *
+   * \returns true on success, false otherwise.
    */
-  virtual void FreeGuardRegion(Address address, size_t size) = 0;
+  virtual V8_WARN_UNUSED_RESULT bool FreeGuardRegion(Address address,
+                                                     size_t size) = 0;
 
   /**
    * Allocates shared memory pages with the given permissions.
@@ -795,16 +769,16 @@ class VirtualAddressSpace {
   /**
    * Frees previously allocated shared pages.
    *
-   * This function will terminate the process on failure as this implies a bug
-   * in the client. As such, there is no return value.
-   *
    * \param address The start address of the pages to free. This address must
-   * have been obtained through a call to AllocateSharedPages.
+   * have been obtains from a call to AllocateSharedPages.
    *
    * \param size The size in bytes of the region to free. This must match the
    * size passed to AllocateSharedPages when the pages were allocated.
+   *
+   * \returns true on success, false otherwise.
    */
-  virtual void FreeSharedPages(Address address, size_t size) = 0;
+  virtual V8_WARN_UNUSED_RESULT bool FreeSharedPages(Address address,
+                                                     size_t size) = 0;
 
   /**
    * Whether this instance can allocate subspaces or not.
@@ -843,24 +817,6 @@ class VirtualAddressSpace {
   // example by combining them into some form of page operation method that
   // takes a command enum as parameter.
   //
-
-  /**
-   * Recommits discarded pages in the given range with given permissions.
-   * Discarded pages must be recommitted with their original permissions
-   * before they are used again.
-   *
-   * \param address The start address of the range. Must be aligned to
-   * page_size().
-   *
-   * \param size The size in bytes of the range. Must be a multiple
-   * of page_size().
-   *
-   * \param permissions The permissions for the range that the pages must have.
-   *
-   * \returns true on success, false otherwise.
-   */
-  virtual V8_WARN_UNUSED_RESULT bool RecommitPages(
-      Address address, size_t size, PagePermissions permissions) = 0;
 
   /**
    * Frees memory in the given [address, address + size) range. address and
@@ -931,9 +887,11 @@ class Platform {
 
   /**
    * Allows the embedder to manage memory page allocations.
-   * Returning nullptr will cause V8 to use the default page allocator.
    */
-  virtual PageAllocator* GetPageAllocator() = 0;
+  virtual PageAllocator* GetPageAllocator() {
+    // TODO(bbudge) Make this abstract after all embedders implement this.
+    return nullptr;
+  }
 
   /**
    * Allows the embedder to specify a custom allocator used for zones.
@@ -950,7 +908,21 @@ class Platform {
    * error.
    * Embedder overrides of this function must NOT call back into V8.
    */
-  virtual void OnCriticalMemoryPressure() {}
+  virtual void OnCriticalMemoryPressure() {
+    // TODO(bbudge) Remove this when embedders override the following method.
+    // See crbug.com/634547.
+  }
+
+  /**
+   * Enables the embedder to respond in cases where V8 can't allocate large
+   * memory regions. The |length| parameter is the amount of memory needed.
+   * Returns true if memory is now available. Returns false if no memory could
+   * be made available. V8 will retry allocations until this method returns
+   * false.
+   *
+   * Embedder overrides of this function must NOT call back into V8.
+   */
+  virtual bool OnCriticalMemoryPressure(size_t length) { return false; }
 
   /**
    * Gets the number of worker threads used by
@@ -1048,28 +1020,16 @@ class Platform {
    * thread (A=>B/B=>A deadlock) and [2] JobTask::Run or
    * JobTask::GetMaxConcurrency may be invoked synchronously from JobHandle
    * (B=>JobHandle::foo=>B deadlock).
-   */
-  virtual std::unique_ptr<JobHandle> PostJob(
-      TaskPriority priority, std::unique_ptr<JobTask> job_task) {
-    auto handle = CreateJob(priority, std::move(job_task));
-    handle->NotifyConcurrencyIncrease();
-    return handle;
-  }
-
-  /**
-   * Creates and returns a JobHandle associated with a Job. Unlike PostJob(),
-   * this doesn't immediately schedules |worker_task| to run; the Job is then
-   * scheduled by calling either NotifyConcurrencyIncrease() or Join().
    *
-   * A sufficient CreateJob() implementation that uses the default Job provided
-   * in libplatform looks like:
-   *  std::unique_ptr<JobHandle> CreateJob(
+   * A sufficient PostJob() implementation that uses the default Job provided in
+   * libplatform looks like:
+   *  std::unique_ptr<JobHandle> PostJob(
    *      TaskPriority priority, std::unique_ptr<JobTask> job_task) override {
    *    return v8::platform::NewDefaultJobHandle(
    *        this, priority, std::move(job_task), NumberOfWorkerThreads());
    * }
    */
-  virtual std::unique_ptr<JobHandle> CreateJob(
+  virtual std::unique_ptr<JobHandle> PostJob(
       TaskPriority priority, std::unique_ptr<JobTask> job_task) = 0;
 
   /**
