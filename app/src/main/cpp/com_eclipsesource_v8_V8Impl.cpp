@@ -118,7 +118,7 @@ public:
     platform_ = platform.get();
     channel_ = std::unique_ptr<V8InspectorChannelImpl>(new V8InspectorChannelImpl(isolate, inspectorDelegate));
     inspector_ = v8_inspector::V8Inspector::create(isolate, this);
-    session_ = inspector_->connect(kContextGroupId, channel_.get(), v8_inspector::StringView(),v8_inspector::V8Inspector::kFullyTrusted);
+    session_ = inspector_->connect(kContextGroupId, channel_.get(), v8_inspector::StringView());
     context_->SetAlignedPointerInEmbedderData(1, this);
 
     inspector_->contextCreated(
@@ -1873,7 +1873,7 @@ JNIEXPORT void JNICALL Java_com_eclipsesource_v8_V8__1setWeak
       jobject v8 = reinterpret_cast<V8Runtime*>(wrd->v8RuntimePtr)->v8;
       env->CallVoidMethod(v8, v8WeakReferenceReleased, wrd->objectHandle);
       delete(wrd);
-    }, WeakCallbackType::kParameter);
+    }, WeakCallbackType::kFinalizer);
 }
 
 JNIEXPORT void JNICALL Java_com_eclipsesource_v8_V8__1clearWeak

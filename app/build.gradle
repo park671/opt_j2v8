@@ -4,25 +4,26 @@ plugins {
 }
 
 android {
-    compileSdk 31
+    compileSdk 33
 
     defaultConfig {
         minSdk 21
-        targetSdk 31
+        targetSdk 33
         versionCode 1
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake {
-                arguments "-DANDROID_PLATFORM=android-23"
+                arguments "-DANDROID_PLATFORM=android-30"
                 cppFlags ''
             }
         }
         ndk {
             // Specifies the ABI configurations of your native
             // libraries Gradle should build and package with your app.
-            abiFilters 'armeabi-v7a','arm64-v8a'
+            //noinspection ChromeOsAbiSupport
+            abiFilters 'arm64-v8a'
         }
     }
 
