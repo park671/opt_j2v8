@@ -25,56 +25,57 @@ import com.eclipsesource.v8.utils.V8Executor;
 import com.eclipsesource.v8.utils.V8Map;
 import com.eclipsesource.v8.utils.V8Runnable;
 
+import dalvik.annotation.optimization.FastNative;
+
 /**
  * An isolated V8Runtime. All JavaScript execution must exist
  * on a single runtime, and data is not shared between runtimes.
  * A runtime must be created and released when finished.
- *
+ * <p>
  * All access to a runtime must come from the same thread, unless
  * the thread explicitly gives up control using the V8Locker.
- *
+ * <p>
  * A public static factory method can be used to create the runtime.
- *
+ * <p>
  * V8 runtime = V8.createV8Runtime();
- *
  */
 public class V8 extends V8Object {
 
-    private static Object                lock                    = new Object();
-    private volatile static int          runtimeCounter          = 0;
-    private static String                v8Flags                 = null;
-    private static boolean               initialized             = false;
-    protected Map<Long, V8Value>         v8WeakReferences        = new HashMap<Long, V8Value>();
+    private static Object lock = new Object();
+    private volatile static int runtimeCounter = 0;
+    private static String v8Flags = null;
+    private static boolean initialized = false;
+    protected Map<Long, V8Value> v8WeakReferences = new HashMap<Long, V8Value>();
 
-    private Map<String, Object>          data                    = null;
-    private final V8Locker               locker;
-    private SignatureProvider            signatureProvider       = null;
-    private long                         objectReferences        = 0;
-    private long                         v8RuntimePtr            = 0;
-    private List<Releasable>             resources               = null;
-    private V8Map<V8Executor>            executors               = null;
-    private boolean                      forceTerminateExecutors = false;
-    private Map<Long, MethodDescriptor>  functionRegistry        = new HashMap<Long, MethodDescriptor>();
-    private LinkedList<ReferenceHandler> referenceHandlers       = new LinkedList<ReferenceHandler>();
-    private LinkedList<V8Runnable>       releaseHandlers         = new LinkedList<V8Runnable>();
+    private Map<String, Object> data = null;
+    private final V8Locker locker;
+    private SignatureProvider signatureProvider = null;
+    private long objectReferences = 0;
+    private long v8RuntimePtr = 0;
+    private List<Releasable> resources = null;
+    private V8Map<V8Executor> executors = null;
+    private boolean forceTerminateExecutors = false;
+    private Map<Long, MethodDescriptor> functionRegistry = new HashMap<Long, MethodDescriptor>();
+    private LinkedList<ReferenceHandler> referenceHandlers = new LinkedList<ReferenceHandler>();
+    private LinkedList<V8Runnable> releaseHandlers = new LinkedList<V8Runnable>();
 
-    private static boolean               nativeLibraryLoaded     = false;
-    private static Error                 nativeLoadError         = null;
-    private static Exception             nativeLoadException     = null;
-    private static V8Value               undefined               = new V8Object.Undefined();
-    private static Object                invalid                 = new Object();
+    private static boolean nativeLibraryLoaded = false;
+    private static Error nativeLoadError = null;
+    private static Exception nativeLoadException = null;
+    private static V8Value undefined = new V8Object.Undefined();
+    private static Object invalid = new Object();
 
     private class MethodDescriptor {
-        Object           object;
-        Method           method;
-        JavaCallback     callback;
+        Object object;
+        Method method;
+        JavaCallback callback;
         JavaVoidCallback voidCallback;
-        boolean          includeReceiver;
+        boolean includeReceiver;
     }
 
     private synchronized static void load(final String tmpDirectory) {
         try {
-            LibraryLoader.loadLibrary(tmpDirectory);
+            System.loadLibrary("j2v8");
             nativeLibraryLoaded = true;
         } catch (Error e) {
             nativeLoadError = e;
@@ -120,11 +121,10 @@ public class V8 extends V8Object {
      * Creates a new V8Runtime and loads the required native libraries if they
      * are not already loaded. An alias is also set for the global scope. For example,
      * 'window' can be set as the global scope name.
-     *
+     * <p>
      * The current thread is given the lock to this runtime.
      *
      * @param globalAlias The name to associate with the global scope.
-     *
      * @return A new isolated V8 Runtime.
      */
     public static V8 createV8Runtime(final String globalAlias) {
@@ -135,13 +135,12 @@ public class V8 extends V8Object {
      * Creates a new V8Runtime and loads the required native libraries if they
      * are not already loaded. An alias is also set for the global scope. For example,
      * 'window' can be set as the global scope name.
-     *
+     * <p>
      * The current thread is given the lock to this runtime.
      *
-     * @param globalAlias The name to associate with the global scope.
+     * @param globalAlias   The name to associate with the global scope.
      * @param tempDirectory The name of the directory to extract the native
-     * libraries too.
-     *
+     *                      libraries too.
      * @return A new isolated V8 Runtime.
      */
     public static V8 createV8Runtime(final String globalAlias, final String tempDirectory) {
@@ -210,7 +209,7 @@ public class V8 extends V8Object {
     /**
      * Associates an arbitrary object with this runtime.
      *
-     * @param key The key used to reference this object
+     * @param key   The key used to reference this object
      * @param value The object to associate with this runtime
      */
     public synchronized void setData(final String key, final Object value) {
@@ -225,7 +224,6 @@ public class V8 extends V8Object {
      * has been associated.
      *
      * @param key The key used to reference this object
-     *
      * @return The data object associated with this runtime, or null.
      */
     public Object getData(final String key) {
@@ -255,10 +253,7 @@ public class V8 extends V8Object {
 
     private static void checkNativeLibraryLoaded() {
         if (!nativeLibraryLoaded) {
-            String vendorName = LibraryLoader.computeLibraryShortName(true);
-            String baseName = LibraryLoader.computeLibraryShortName(false);
-            String message = "J2V8 native library not loaded (" + baseName + "/" + vendorName + ")";
-
+            String message = "J2V8 native library not loaded";
             if (nativeLoadError != null) {
                 throw new IllegalStateException(message, nativeLoadError);
             } else if (nativeLoadException != null) {
@@ -381,8 +376,8 @@ public class V8 extends V8Object {
      * released, a runtime cannot be reused.
      *
      * @param reportMemoryLeaks True if memory leaks should be
-     * reported by throwing an IllegalStateException if any
-     * objects were not released.
+     *                          reported by throwing an IllegalStateException if any
+     *                          objects were not released.
      */
     public void release(final boolean reportMemoryLeaks) {
         if (isReleased()) {
@@ -432,7 +427,7 @@ public class V8 extends V8Object {
      * runtime with its own thread. By registering an executor, it can be
      * terminated when this runtime is released.
      *
-     * @param key The key to associate the executor with.
+     * @param key      The key to associate the executor with.
      * @param executor The executor itself.
      */
     public void registerV8Executor(final V8Object key, final V8Executor executor) {
@@ -480,7 +475,7 @@ public class V8 extends V8Object {
      * should terminate.
      *
      * @param forceTerminate Specify if the executors should be
-     * forcefully terminated, or simply notified to shutdown when ready.
+     *                       forcefully terminated, or simply notified to shutdown when ready.
      */
     public void shutdownExecutors(final boolean forceTerminate) {
         checkThread();
@@ -515,7 +510,6 @@ public class V8 extends V8Object {
      * If the result is not an integer, then a V8ResultUndefinedException is thrown.
      *
      * @param script The script to execute.
-     *
      * @return The result of the script as an integer, or V8ResultUndefinedException if
      * the result is not an integer.
      */
@@ -527,11 +521,10 @@ public class V8 extends V8Object {
      * Executes a JS Script on this runtime and returns the result as an integer.
      * If the result is not an integer, then a V8ResultUndefinedException is thrown.
      *
-     * @param script The script to execute.
+     * @param script     The script to execute.
      * @param scriptName The name of the script
      * @param lineNumber The line number that is considered to be the first line of
-     * the script. Typically 0, but could be set to another value for excepton purposes.
-     *
+     *                   the script. Typically 0, but could be set to another value for excepton purposes.
      * @return The result of the script as an integer, or V8ResultUndefinedException if
      * the result is not an integer.
      */
@@ -551,7 +544,6 @@ public class V8 extends V8Object {
      * If the result is not a double, then a V8ResultUndefinedException is thrown.
      *
      * @param script The script to execute.
-     *
      * @return The result of the script as a double, or V8ResultUndefinedException if
      * the result is not a double.
      */
@@ -563,11 +555,10 @@ public class V8 extends V8Object {
      * Executes a JS Script on this runtime and returns the result as a double.
      * If the result is not a double, then a V8ResultUndefinedException is thrown.
      *
-     * @param script The script to execute.
+     * @param script     The script to execute.
      * @param scriptName The name of the script
      * @param lineNumber The line number that is considered to be the first line of
-     * the script. Typically 0, but could be set to another value for exception stack trace purposes.
-     *
+     *                   the script. Typically 0, but could be set to another value for exception stack trace purposes.
      * @return The result of the script as a double, or V8ResultUndefinedException if
      * the result is not a double.
      */
@@ -582,7 +573,6 @@ public class V8 extends V8Object {
      * If the result is not a String, then a V8ResultUndefinedException is thrown.
      *
      * @param script The script to execute.
-     *
      * @return The result of the script as a String, or V8ResultUndefinedException if
      * the result is not a String.
      */
@@ -594,11 +584,10 @@ public class V8 extends V8Object {
      * Executes a JS Script on this runtime and returns the result as a String.
      * If the result is not a String, then a V8ResultUndefinedException is thrown.
      *
-     * @param script The script to execute.
+     * @param script     The script to execute.
      * @param scriptName The name of the script
      * @param lineNumber The line number that is considered to be the first line of
-     * the script. Typically 0, but could be set to another value for exception stack trace purposes.
-     *
+     *                   the script. Typically 0, but could be set to another value for exception stack trace purposes.
      * @return The result of the script as a String, or V8ResultUndefinedException if
      * the result is not a String.
      */
@@ -613,7 +602,6 @@ public class V8 extends V8Object {
      * If the result is not a boolean, then a V8ResultUndefinedException is thrown.
      *
      * @param script The script to execute.
-     *
      * @return The result of the script as a boolean, or V8ResultUndefinedException if
      * the result is not a boolean.
      */
@@ -625,11 +613,10 @@ public class V8 extends V8Object {
      * Executes a JS Script on this runtime and returns the result as a boolean.
      * If the result is not a boolean, then a V8ResultUndefinedException is thrown.
      *
-     * @param script The script to execute.
+     * @param script     The script to execute.
      * @param scriptName The name of the script
      * @param lineNumber The line number that is considered to be the first line of
-     * the script. Typically 0, but could be set to another value for exception stack trace purposes.
-     *
+     *                   the script. Typically 0, but could be set to another value for exception stack trace purposes.
      * @return The result of the script as a boolean, or V8ResultUndefinedException if
      * the result is not a boolean.
      */
@@ -644,7 +631,6 @@ public class V8 extends V8Object {
      * If the result is not a V8Array, then a V8ResultUndefinedException is thrown.
      *
      * @param script The script to execute.
-     *
      * @return The result of the script as a V8Array, or V8ResultUndefinedException if
      * the result is not a V8Array.
      */
@@ -656,11 +642,10 @@ public class V8 extends V8Object {
      * Executes a JS Script on this runtime and returns the result as a V8Array.
      * If the result is not a V8Array, then a V8ResultUndefinedException is thrown.
      *
-     * @param script The script to execute.
+     * @param script     The script to execute.
      * @param scriptName The name of the script
      * @param lineNumber The line number that is considered to be the first line of
-     * the script. Typically 0, but could be set to another value for exception stack trace purposes.
-     *
+     *                   the script. Typically 0, but could be set to another value for exception stack trace purposes.
      * @return The result of the script as a V8Array, or V8ResultUndefinedException if
      * the result is not a V8Array.
      */
@@ -678,7 +663,6 @@ public class V8 extends V8Object {
      * Primitives will be boxed.
      *
      * @param script The script to execute.
-     *
      * @return The result of the script as a Java Object.
      */
     public Object executeScript(final String script) {
@@ -690,8 +674,7 @@ public class V8 extends V8Object {
      * Primitives will be boxed.
      *
      * @param script The script to execute.
-     * @param uri The name of the script
-     *
+     * @param uri    The name of the script
      * @return The result of the script as a Java Object.
      */
     public Object executeScript(final String script, final String uri) {
@@ -704,11 +687,10 @@ public class V8 extends V8Object {
      * Executes a JS Script on this runtime and returns the result as a Java Object.
      * Primitives will be boxed.
      *
-     * @param script The script to execute.
-     * @param uri The name of the script
+     * @param script     The script to execute.
+     * @param uri        The name of the script
      * @param lineNumber The line number that is considered to be the first line of
-     * the script. Typically 0, but could be set to another value for exception stack trace purposes.
-     *
+     *                   the script. Typically 0, but could be set to another value for exception stack trace purposes.
      * @return The result of the script as a Java Object.
      */
     public Object executeScript(final String script, final String uri, final int lineNumber) {
@@ -720,15 +702,14 @@ public class V8 extends V8Object {
     /**
      * Executes a JS Script module on this runtime and returns the result as a Java Object.
      * Primitives will be boxed.
-     *
+     * <p>
      * If the script does not match the signature (as verified with the public key) then a
      * V8SecurityException will be thrown.
      *
-     * @param script The signed script to execute
-     * @param modulePrefix The module prefix
+     * @param script        The signed script to execute
+     * @param modulePrefix  The module prefix
      * @param modulePostfix The module postfix
-     * @param uri The name of the script
-     *
+     * @param uri           The name of the script
      * @return The result of the script as a Java Object.
      */
     public Object executeModule(final String script, final String modulePrefix, final String modulePostfix, final String uri) {
@@ -742,7 +723,6 @@ public class V8 extends V8Object {
      * If the result is not a V8Object, then a V8ResultUndefinedException is thrown.
      *
      * @param script The script to execute.
-     *
      * @return The result of the script as a V8Object, or V8ResultUndefinedException if
      * the result is not a V8Object.
      */
@@ -754,11 +734,10 @@ public class V8 extends V8Object {
      * Executes a JS Script on this runtime and returns the result as a V8Object.
      * If the result is not a V8Object, then a V8ResultUndefinedException is thrown.
      *
-     * @param script The script to execute.
+     * @param script     The script to execute.
      * @param scriptName The name of the script
      * @param lineNumber The line number that is considered to be the first line of
-     * the script. Typically 0, but could be set to another value for exception stack trace purposes.
-     *
+     *                   the script. Typically 0, but could be set to another value for exception stack trace purposes.
      * @return The result of the script as a V8Object, or V8ResultUndefinedException if
      * the result is not a V8Object.
      */
@@ -783,10 +762,10 @@ public class V8 extends V8Object {
     /**
      * Executes a JS Script on this runtime.
      *
-     * @param script The script to execute.
+     * @param script     The script to execute.
      * @param scriptName The name of the script
      * @param lineNumber The line number that is considered to be the first line of
-     * the script. Typically 0, but could be set to another value for exception stack trace purposes.
+     *                   the script. Typically 0, but could be set to another value for exception stack trace purposes.
      */
     public void executeVoidScript(final String script, final String scriptName, final int lineNumber) {
         checkThread();
@@ -1452,210 +1431,312 @@ public class V8 extends V8Object {
         _releaseMethodDescriptor(v8RuntimePtr, methodDescriptor);
     }
 
+    @FastNative
     private native long _initNewV8Object(long v8RuntimePtr);
 
+    @FastNative
     private native long _initEmptyContainer(long v8RuntimePtr);
 
+    @FastNative
     private native void _acquireLock(long v8RuntimePtr);
 
+    @FastNative
     private native void _releaseLock(long v8RuntimePtr);
 
+    @FastNative
     private native void _lowMemoryNotification(long v8RuntimePtr);
 
+    @FastNative
     private native void _createTwin(long v8RuntimePtr, long objectHandle, long twinHandle);
 
+    @FastNative
     private native void _releaseRuntime(long v8RuntimePtr);
 
+    @FastNative
     private native long _createIsolate(String globalAlias);
 
+    @FastNative
     private native long _createInspector(long v8RuntimePtr, final V8InspectorDelegate inspectorDelegate, final String contextName);
 
+    @FastNative
     private native void _dispatchProtocolMessage(final long v8RuntimePtr, long v8InspectorPtr, final String protocolMessage);
 
+    @FastNative
     private native void _schedulePauseOnNextStatement(final long v8RuntimePtr, long v8InspectorPtr, final String reason);
 
+    @FastNative
     private native int _executeIntegerScript(long v8RuntimePtr, final String script, final String scriptName, final int lineNumber);
 
+    @FastNative
     private native double _executeDoubleScript(long v8RuntimePtr, final String script, final String scriptName, final int lineNumber);
 
+    @FastNative
     private native String _executeStringScript(long v8RuntimePtr, final String script, final String scriptName, final int lineNumber);
 
+    @FastNative
     private native boolean _executeBooleanScript(long v8RuntimePtr, final String script, final String scriptName, final int lineNumber);
 
+    @FastNative
     private native Object _executeScript(long v8RuntimePtr, int expectedType, String script, String scriptName, int lineNumber);
 
+    @FastNative
     private native void _executeVoidScript(long v8RuntimePtr, String script, String scriptName, int lineNumber);
 
+    @FastNative
     private native void _release(long v8RuntimePtr, long objectHandle);
 
+    @FastNative
     private native void _releaseMethodDescriptor(long v8RuntimePtr, long methodDescriptor);
 
+    @FastNative
     private native boolean _contains(long v8RuntimePtr, long objectHandle, final String key);
 
+    @FastNative
     private native String[] _getKeys(long v8RuntimePtr, long objectHandle);
 
+    @FastNative
     private native int _getInteger(long v8RuntimePtr, long objectHandle, final String key);
 
+    @FastNative
     private native boolean _getBoolean(long v8RuntimePtr, long objectHandle, final String key);
 
+    @FastNative
     private native double _getDouble(long v8RuntimePtr, long objectHandle, final String key);
 
+    @FastNative
     private native String _getString(long v8RuntimePtr, long objectHandle, final String key);
 
+    @FastNative
     private native Object _get(long v8RuntimePtr, int expectedType, long objectHandle, final String key);
 
+    @FastNative
     private native int _executeIntegerFunction(long v8RuntimePtr, long objectHandle, String name, long parametersHandle);
 
+    @FastNative
     private native double _executeDoubleFunction(long v8RuntimePtr, long objectHandle, String name, long parametersHandle);
 
+    @FastNative
     private native String _executeStringFunction(long v8RuntimePtr2, long handle, String name, long parametersHandle);
 
+    @FastNative
     private native boolean _executeBooleanFunction(long v8RuntimePtr2, long handle, String name, long parametersHandle);
 
+    @FastNative
     private native Object _executeFunction(long v8RuntimePtr, int expectedType, long objectHandle, String name, long parametersHandle);
 
+    @FastNative
     private native Object _executeFunction(long v8RuntimePtr, long receiverHandle, long functionHandle, long parametersHandle);
 
+    @FastNative
     private native void _executeVoidFunction(long v8RuntimePtr, long objectHandle, final String name, final long parametersHandle);
 
+    @FastNative
     private native boolean _equals(long v8RuntimePtr, long objectHandle, long that);
 
+    @FastNative
     private native String _toString(long v8RuntimePtr, long ObjectHandle);
 
+    @FastNative
     private native boolean _strictEquals(long v8RuntimePtr, long objectHandle, long that);
 
+    @FastNative
     private native boolean _sameValue(long v8RuntimePtr, long objectHandle, long that);
 
+    @FastNative
     private native int _identityHash(long v8RuntimePtr, long objectHandle);
 
+    @FastNative
     private native void _add(long v8RuntimePtr, long objectHandle, final String key, final int value);
 
+    @FastNative
     private native void _addObject(long v8RuntimePtr, long objectHandle, final String key, final long value);
 
+    @FastNative
     private native void _add(long v8RuntimePtr, long objectHandle, final String key, final boolean value);
 
+    @FastNative
     private native void _add(long v8RuntimePtr, long objectHandle, final String key, final double value);
 
+    @FastNative
     private native void _add(long v8RuntimePtr, long objectHandle, final String key, final String value);
 
+    @FastNative
     private native void _addUndefined(long v8RuntimePtr, long objectHandle, final String key);
 
+    @FastNative
     private native void _addNull(long v8RuntimePtr, long objectHandle, final String key);
 
+    @FastNative
     private native long _registerJavaMethod(long v8RuntimePtr, long objectHandle, final String functionName, final boolean voidMethod);
 
+    @FastNative
     private native long _initNewV8Array(long v8RuntimePtr);
 
+    @FastNative
     private native long[] _initNewV8Function(long v8RuntimePtr);
 
+    @FastNative
     private native int _arrayGetSize(long v8RuntimePtr, long arrayHandle);
 
+    @FastNative
     private native int _arrayGetInteger(long v8RuntimePtr, long arrayHandle, int index);
 
+    @FastNative
     private native boolean _arrayGetBoolean(long v8RuntimePtr, long arrayHandle, int index);
 
+    @FastNative
     private native byte _arrayGetByte(long v8RuntimePtr, long arrayHandle, int index);
 
+    @FastNative
     private native double _arrayGetDouble(long v8RuntimePtr, long arrayHandle, int index);
 
+    @FastNative
     private native String _arrayGetString(long v8RuntimePtr, long arrayHandle, int index);
 
+    @FastNative
     private native Object _arrayGet(long v8RuntimePtr, int expectedType, long arrayHandle, int index);
 
+    @FastNative
     private native void _addArrayIntItem(long v8RuntimePtr, long arrayHandle, int value);
 
+    @FastNative
     private native void _addArrayBooleanItem(long v8RuntimePtr, long arrayHandle, boolean value);
 
+    @FastNative
     private native void _addArrayDoubleItem(long v8RuntimePtr, long arrayHandle, double value);
 
+    @FastNative
     private native void _addArrayStringItem(long v8RuntimePtr, long arrayHandle, String value);
 
+    @FastNative
     private native void _addArrayObjectItem(long v8RuntimePtr, long arrayHandle, long value);
 
+    @FastNative
     private native void _addArrayUndefinedItem(long v8RuntimePtr, long arrayHandle);
 
+    @FastNative
     private native void _addArrayNullItem(long v8RuntimePtr, long arrayHandle);
 
+    @FastNative
     private native int _getType(long v8RuntimePtr, long objectHandle, final String key);
 
+    @FastNative
     private native int _getType(long v8RuntimePtr, long objectHandle, final int index);
 
+    @FastNative
     private native int _getArrayType(long v8RuntimePtr, long objectHandle);
 
+    @FastNative
     private native void _setPrototype(long v8RuntimePtr, long objectHandle, long prototypeHandle);
 
+    @FastNative
     private native String _getConstructorName(long v8RuntimePtr, long objectHandle);
 
+    @FastNative
     private native int _getType(long v8RuntimePtr, long objectHandle);
 
+    @FastNative
     private native int _getType(long v8RuntimePtr, long objectHandle, final int index, final int length);
 
+    @FastNative
     private native double[] _arrayGetDoubles(final long v8RuntimePtr, final long objectHandle, final int index, final int length);
 
+    @FastNative
     private native int[] _arrayGetIntegers(final long v8RuntimePtr, final long objectHandle, final int index, final int length);
 
+    @FastNative
     private native boolean[] _arrayGetBooleans(final long v8RuntimePtr, final long objectHandle, final int index, final int length);
 
+    @FastNative
     private native byte[] _arrayGetBytes(final long v8RuntimePtr, final long objectHandle, final int index, final int length);
 
+    @FastNative
     private native String[] _arrayGetStrings(final long v8RuntimePtr, final long objectHandle, final int index, final int length);
 
+    @FastNative
     private native int _arrayGetIntegers(final long v8RuntimePtr, final long objectHandle, final int index, final int length, int[] resultArray);
 
+    @FastNative
     private native int _arrayGetDoubles(final long v8RuntimePtr, final long objectHandle, final int index, final int length, double[] resultArray);
 
+    @FastNative
     private native int _arrayGetBooleans(final long v8RuntimePtr, final long objectHandle, final int index, final int length, boolean[] resultArray);
 
+    @FastNative
     private native int _arrayGetBytes(final long v8RuntimePtr, final long objectHandle, final int index, final int length, byte[] resultArray);
 
+    @FastNative
     private native int _arrayGetStrings(final long v8RuntimePtr, final long objectHandle, final int index, final int length, String[] resultArray);
 
+    @FastNative
     private native long _initNewV8ArrayBuffer(long v8RuntimePtr, int capacity);
 
+    @FastNative
     private native long _initNewV8ArrayBuffer(long v8RuntimePtr, ByteBuffer buffer, int capacity);
 
+    @FastNative
     private native long _initNewV8Int32Array(long runtimePtr, long bufferHandle, int offset, int size);
 
+    @FastNative
     private native long _initNewV8UInt32Array(long runtimePtr, long bufferHandle, int offset, int size);
 
+    @FastNative
     private native long _initNewV8Float32Array(long runtimePtr, long bufferHandle, int offset, int size);
 
+    @FastNative
     private native long _initNewV8Float64Array(long runtimePtr, long bufferHandle, int offset, int size);
 
+    @FastNative
     private native long _initNewV8Int16Array(long runtimePtr, long bufferHandle, int offset, int size);
 
+    @FastNative
     private native long _initNewV8UInt16Array(long runtimePtr, long bufferHandle, int offset, int size);
 
+    @FastNative
     private native long _initNewV8Int8Array(long runtimePtr, long bufferHandle, int offset, int size);
 
+    @FastNative
     private native long _initNewV8UInt8Array(long runtimePtr, long bufferHandle, int offset, int size);
 
+    @FastNative
     private native long _initNewV8UInt8ClampedArray(long runtimePtr, long bufferHandle, int offset, int size);
 
+    @FastNative
     private native void _setWeak(long runtimePtr, long objectHandle);
 
+    @FastNative
     private native void _clearWeak(long runtimePtr, long objectHandle);
 
+    @FastNative
     private native boolean _isWeak(long runtimePtr, long objectHandle);
 
+    @FastNative
     private native ByteBuffer _createV8ArrayBufferBackingStore(final long v8RuntimePtr, final long objectHandle, final int capacity);
 
+    @FastNative
     private native static String _getVersion();
 
     private static native void _setFlags(String v8flags);
 
+    @FastNative
     private native void _terminateExecution(final long v8RuntimePtr);
 
+    @FastNative
     private native long _getGlobalObject(final long v8RuntimePtr);
 
+    @FastNative
     private native static long _getBuildID();
 
+    @FastNative
     private native static void _startNodeJS(final long v8RuntimePtr, final String fileName);
 
+    @FastNative
     private native static boolean _pumpMessageLoop(final long v8RuntimePtr);
 
+    @FastNative
     private native static boolean _isRunning(final long v8RuntimePtr);
 
+    @FastNative
     private native static boolean _isNodeCompatible();
 
     public static boolean isNodeCompatible() {
