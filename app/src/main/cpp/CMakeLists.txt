@@ -46,7 +46,9 @@ set_target_properties(cpp PROPERTIES IMPORTED_LOCATION ${J2V8_V8_DIR}/${ANDROID_
 
 add_library(j2v8 SHARED ${src_files})
 
-target_compile_options(j2v8 PRIVATE -DV8_COMPRESS_POINTERS)
+if(${ANDROID_ABI} STREQUAL "arm64-v8a" OR ${ANDROID_ABI} STREQUAL  "x86_64")
+    target_compile_options(j2v8 PRIVATE -DV8_COMPRESS_POINTERS)
+endif()
 
 # set the include directories
 include_directories(${include_dirs})

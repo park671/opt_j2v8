@@ -38,6 +38,7 @@ class MainActivity : AppCompatActivity() {
                 .setAction("Action", null).show()
         }
         val v8 = V8.createV8Runtime()
+        Log.d("Park", "v8 version=" + V8.getV8Version())
         val callback =
             JavaVoidCallback { receiver, parameters ->
                 if (parameters.length() > 0) {

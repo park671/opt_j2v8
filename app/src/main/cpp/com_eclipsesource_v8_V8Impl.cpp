@@ -19,6 +19,7 @@
 #include <cstdlib>
 #include "com_eclipsesource_v8_V8Impl.h"
 #include "snap_blob.h"
+#include "snap_blob32.h"
 
 #define TAG "J2V8_V8Impl"
 
@@ -406,8 +407,14 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void*) {
     v8Platform = v8::platform::NewDefaultPlatform();
     v8::V8::InitializePlatform(v8Platform.get());
     v8::StartupData current_snapshot;
+#if defined(__LP64__)
     current_snapshot.raw_size = snap_blob_length;
     current_snapshot.data = snap_blob;
+#else
+    current_snapshot.raw_size = snap_blob32_length;
+    current_snapshot.data = snap_blob32;
+#endif
+
     v8::V8::SetSnapshotDataBlob(&current_snapshot);
     v8::V8::Initialize();
 
