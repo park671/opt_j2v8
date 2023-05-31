@@ -233,7 +233,7 @@ class V8_EXPORT Isolate {
      * Explicitly specify a startup snapshot blob. The embedder owns the blob.
      * The embedder *must* ensure that the snapshot is from a trusted source.
      */
-    StartupData* snapshot_blob = nullptr;
+    const StartupData* snapshot_blob = nullptr;
 
     /**
      * Enables the host application to provide a mechanism for recording
@@ -294,12 +294,6 @@ class V8_EXPORT Isolate {
      */
     FatalErrorCallback fatal_error_callback = nullptr;
     OOMErrorCallback oom_error_callback = nullptr;
-
-    /**
-     * The following parameter is experimental and may change significantly.
-     * This is currently for internal testing.
-     */
-    Isolate* experimental_attach_to_shared_isolate = nullptr;
   };
 
   /**
@@ -541,6 +535,8 @@ class V8_EXPORT Isolate {
     kFunctionPrototypeArguments = 113,
     kFunctionPrototypeCaller = 114,
     kTurboFanOsrCompileStarted = 115,
+    kAsyncStackTaggingCreateTaskCall = 116,
+    kDurationFormat = 117,
 
     // If you add new values here, you'll also need to update Chromium's:
     // web_feature.mojom, use_counter_callback.cc, and enums.xml. V8 changes to
@@ -958,22 +954,20 @@ class V8_EXPORT Isolate {
    * Attaches a managed C++ heap as an extension to the JavaScript heap. The
    * embedder maintains ownership of the CppHeap. At most one C++ heap can be
    * attached to V8.
+   *
    * AttachCppHeap cannot be used simultaneously with SetEmbedderHeapTracer.
    *
-   * This is an experimental feature and may still change significantly.
+   * Multi-threaded use requires the use of v8::Locker/v8::Unlocker, see
+   * CppHeap.
    */
   void AttachCppHeap(CppHeap*);
 
   /**
    * Detaches a managed C++ heap if one was attached using `AttachCppHeap()`.
-   *
-   * This is an experimental feature and may still change significantly.
    */
   void DetachCppHeap();
 
   /**
-   * This is an experimental feature and may still change significantly.
-
    * \returns the C++ heap managed by V8. Only available if such a heap has been
    *   attached using `AttachCppHeap()`.
    */
@@ -1530,13 +1524,11 @@ class V8_EXPORT Isolate {
 
   void SetWasmLoadSourceMapCallback(WasmLoadSourceMapCallback callback);
 
+  V8_DEPRECATED("Wasm SIMD is always enabled")
   void SetWasmSimdEnabledCallback(WasmSimdEnabledCallback callback);
 
+  V8_DEPRECATED("Wasm exceptions are always enabled")
   void SetWasmExceptionsEnabledCallback(WasmExceptionsEnabledCallback callback);
-
-  V8_DEPRECATED("Dynamic tiering is now enabled by default")
-  void SetWasmDynamicTieringEnabledCallback(WasmDynamicTieringEnabledCallback) {
-  }
 
   void SetSharedArrayBufferConstructorEnabledCallback(
       SharedArrayBufferConstructorEnabledCallback callback);
@@ -1630,7 +1622,7 @@ class V8_EXPORT Isolate {
    * sandbox, the host time zone has to be detected outside the sandbox before
    * calling DateTimeConfigurationChangeNotification function.
    */
-  enum class TimeZoneDetection { kSkip, kRedetect };
+  enum class TimeZoneDetection { kSkip, kRedetect, kCustom };
 
   /**
    * Notification that the embedder has changed the time zone, daylight savings
@@ -1643,7 +1635,8 @@ class V8_EXPORT Isolate {
    * the performance of date operations.
    */
   void DateTimeConfigurationChangeNotification(
-      TimeZoneDetection time_zone_detection = TimeZoneDetection::kSkip);
+      TimeZoneDetection time_zone_detection = TimeZoneDetection::kSkip,
+      const char* custom_timezone_id = nullptr);
 
   /**
    * Notification that the embedder has changed the locale. V8 keeps a cache of

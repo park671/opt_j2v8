@@ -18,6 +18,7 @@
 #include <map>
 #include <cstdlib>
 #include "com_eclipsesource_v8_V8Impl.h"
+#include "snap_blob.h"
 
 #define TAG "J2V8_V8Impl"
 
@@ -404,6 +405,10 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void*) {
     v8::V8::InitializeICU();
     v8Platform = v8::platform::NewDefaultPlatform();
     v8::V8::InitializePlatform(v8Platform.get());
+    v8::StartupData current_snapshot;
+    current_snapshot.raw_size = snap_blob_length;
+    current_snapshot.data = snap_blob;
+    v8::V8::SetSnapshotDataBlob(&current_snapshot);
     v8::V8::Initialize();
 
     // on first creation, store the JVM and a handle to J2V8 classes

@@ -237,7 +237,8 @@ using LogEventCallback = void (*)(const char* name,
 enum class CrashKeyId {
   kIsolateAddress,
   kReadonlySpaceFirstPageAddress,
-  kMapSpaceFirstPageAddress,
+  kMapSpaceFirstPageAddress V8_ENUM_DEPRECATE_SOON("Map space got removed"),
+  kOldSpaceFirstPageAddress,
   kCodeRangeBaseAddress,
   kCodeSpaceFirstPageAddress,
   kDumpType,
@@ -326,11 +327,6 @@ using WasmSimdEnabledCallback = bool (*)(Local<Context> context);
 
 // --- Callback for checking if WebAssembly exceptions are enabled ---
 using WasmExceptionsEnabledCallback = bool (*)(Local<Context> context);
-
-// --- Callback for checking if WebAssembly dynamic tiering is enabled ---
-using WasmDynamicTieringEnabledCallback V8_DEPRECATED(
-    "Dynamic tiering is now enabled by default") =
-    bool (*)(Local<Context> context);
 
 // --- Callback for checking if the SharedArrayBuffer constructor is enabled ---
 using SharedArrayBufferConstructorEnabledCallback =

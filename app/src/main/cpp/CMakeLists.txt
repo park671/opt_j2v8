@@ -9,6 +9,8 @@ cmake_minimum_required(VERSION 3.18.1)
 
 project("j2v8")
 
+set(ANDROID_STL "c++_shared")
+
 set(CMAKE_VERBOSE_MAKEFILE ON)
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--exclude-libs,ALL")#使所有静态库中的符号都不被导出
 
@@ -36,10 +38,17 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wno-unused-function -Wno-unused-varia
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unused-function -Wno-unused-variable -O3 -funroll-loops -ftree-vectorize -ffast-math -fpermissive -fPIC -flto")
 
 # create the j2v8 library
-add_library(v8_monolith STATIC IMPORTED)
-set_target_properties(v8_monolith PROPERTIES IMPORTED_LOCATION ${J2V8_V8_DIR}/${ANDROID_ABI}/libv8_monolith.a)
+add_library(v8_monolith SHARED IMPORTED)
+set_target_properties(v8_monolith PROPERTIES IMPORTED_LOCATION ${J2V8_V8_DIR}/${ANDROID_ABI}/libv8android.so)
+
+add_library(cpp SHARED IMPORTED)
+set_target_properties(cpp PROPERTIES IMPORTED_LOCATION ${J2V8_V8_DIR}/${ANDROID_ABI}/libc++_shared.so)
 
 add_library(j2v8 SHARED ${src_files})
+
+if(${ANDROID_ABI} STREQUAL "arm64-v8a" OR ${ANDROID_ABI} STREQUAL  "x86_64")
+    target_compile_options(j2v8 PRIVATE -DV8_COMPRESS_POINTERS)
+endif()
 
 # set the include directories
 include_directories(${include_dirs})
@@ -47,4 +56,5 @@ include_directories(${include_dirs})
 # link the necessary libraries
 target_link_libraries(j2v8
         v8_monolith
+        cpp
         )
